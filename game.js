@@ -1,19 +1,21 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const scoreElement = document.getElementById('score');
 
-// Меню
-const mainMenu = document.getElementById('mainMenu');
-const pauseMenu = document.getElementById('pauseMenu');
-const winMenu = document.getElementById('winMenu');
-const gameOverMenu = document.getElementById('gameOverMenu');
-const levelMenu = document.getElementById('levelMenu');
+// Адаптация размера canvas под экран
+function resizeCanvas() {
+    canvas.width = Math.min(800, window.innerWidth);
+    canvas.height = Math.min(600, window.innerHeight);
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ==================== ПЕРЕМЕННЫЕ ИГРЫ ====================
 
 // Игрок
 const player = {
     x: 400,
     y: 300,
-    size: 30,
+    size: 40,
     speed: 5,
     color: '#3498db',
     lives: 3,
@@ -21,131 +23,132 @@ const player = {
     invincibleTime: 0
 };
 
-// Монетки
-let coins = [];
-const coinSize = 15;
-const maxCoins = 5;
-
-// Враги
-let enemies = [];
-const enemySize = 35;
-const maxEnemies = 3;
-
-// Босс
-let boss = null;
-const bossSize = 80;
-const bossHealthMax = 100;
-let enemiesToSpawnBoss = 15;
-let enemiesKilled = 0;
-let bossSpawnTimer = 0;
-
-// Оружие
-let projectiles = [];
-let enemyProjectiles = [];
-const projectileSpeed = 8;
-const bossProjectileSpeed = 4;
-
-// Взрывы
-let explosions = [];
-
 // Счёт и уровни
 let score = 0;
 let currentLevel = 1;
-const maxLevels = 5;
-
-// Состояние игры
-let gameState = 'menu';
 let coinsCollected = 0;
-const coinsToWin = 20;
+let enemiesKilled = 0;
+let enemiesToSpawnBoss = 15;
+const maxLevels = 5;
+const coinsToWin = 10;
 
-// Позиция мыши
+// Объекты игры
+let coins = [];
+let enemies = [];
+let projectiles = [];
+let enemyProjectiles = [];
+let explosions = [];
+let boss = null;
+
+// Мышь
 let mouseX = 0;
 let mouseY = 0;
 
-// Клавиши
+// Скорости снарядов
+const projectileSpeed = 8;
+const bossProjectileSpeed = 5;
+
+// Элементы меню
+const scoreElement = document.getElementById('score');
+const mainMenu = document.getElementById('mainMenu');
+const pauseMenu = document.getElementById('pauseMenu');
+const winMenu = document.getElementById('winMenu');
+const gameOverMenu = document.getElementById('gameOverMenu');
+const levelMenu = document.getElementById('levelMenu');
+
+// Состояние игры
+let gameState = 'menu';
+
+// Объект для отслеживания нажатий клавиш
 const keys = {
     ArrowUp: false,
     ArrowDown: false,
     ArrowLeft: false,
     ArrowRight: false,
     w: false,
-    W: false,
-    s: false,
-    S: false,
     a: false,
-    A: false,
+    s: false,
     d: false,
-    D: false,
-    p: false,
-    P: false,
-    r: false,
-    R: false
+    W: false,
+    A: false,
+    S: false,
+    D: false
 };
 
-// Создаем монетки
+// Мобильное управление
+const mobileKeys = {
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false
+};
+
+// Константы количества объектов
+const maxCoins = 15;
+const maxEnemies = 5;
+
+// Настройка кнопок мобильного управления
+function setupMobileControl() {
+    const buttons = [
+        { id: 'btnUp', key: 'ArrowUp' },
+        { id: 'btnDown', key: 'ArrowDown' },
+        { id: 'btnLeft', key: 'ArrowLeft' },
+        { id: 'btnRight', key: 'ArrowRight' }
+    ];
+
+    buttons.forEach(({ id, key }) => {
+        const button = document.getElementById(id);
+        if (button) {
+            // Touch events
+            button.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                mobileKeys[key] = true;
+                button.classList.add('active');
+            }, { passive: false });
+
+            button.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                mobileKeys[key] = false;
+                button.classList.remove('active');
+            }, { passive: false });
+
+            button.addEventListener('touchcancel', (e) => {
+                mobileKeys[key] = false;
+                button.classList.remove('active');
+            }, { passive: false });
+
+            // Mouse events для тестирования на ПК
+            button.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                mobileKeys[key] = true;
+                button.classList.add('active');
+            });
+
+            button.addEventListener('mouseup', () => {
+                mobileKeys[key] = false;
+                button.classList.remove('active');
+            });
+
+            button.addEventListener('mouseleave', () => {
+                mobileKeys[key] = false;
+                button.classList.remove('active');
+            });
+        }
+    });
+}
+setupMobileControl();
+
+// ==================== ФУНКЦИИ СОЗДАНИЯ ОБЪЕКТОВ ====================
+
+// Создание монетки
 function createCoin() {
     return {
-        x: Math.random() * (canvas.width - coinSize * 2) + coinSize,
-        y: Math.random() * (canvas.height - coinSize * 2) + coinSize,
-        size: coinSize
+        x: Math.random() * (canvas.width - 40) + 20,
+        y: Math.random() * (canvas.height - 40) + 20,
+        size: 12
     };
-}
-
-// Создаем врага
-function createEnemy() {
-    const side = Math.floor(Math.random() * 4);
-    let x, y;
-    
-    switch(side) {
-        case 0: x = Math.random() * canvas.width; y = -enemySize; break;
-        case 1: x = canvas.width + enemySize; y = Math.random() * canvas.height; break;
-        case 2: x = Math.random() * canvas.width; y = canvas.height + enemySize; break;
-        case 3: x = -enemySize; y = Math.random() * canvas.height; break;
-    }
-    
-    // С каждым уровнем враги быстрее
-    const speedMultiplier = 1 + (currentLevel - 1) * 0.2;
-    
-    return {
-        x: x,
-        y: y,
-        size: enemySize,
-        speed: (2 + Math.random() * 1.5) * speedMultiplier
-    };
-}
-
-// Создаем босса
-function createBoss() {
-    // С каждым уровнем босс сильнее
-    const bossHealth = bossHealthMax + (currentLevel - 1) * 20;
-    const bossSpeed = 2 + (currentLevel - 1) * 0.3;
-    const bossShootDelay = Math.max(30, 60 - (currentLevel - 1) * 5);
-    
-    return {
-        x: canvas.width / 2 - bossSize / 2,
-        y: -bossSize,
-        size: bossSize,
-        health: bossHealth,
-        maxHealth: bossHealth,
-        speed: bossSpeed,
-        shootTimer: 0,
-        shootDelay: bossShootDelay,
-        explodeTimer: 0,
-        phase: 'enter'
-    };
-}
-
-// Создаем взрыв
-function createExplosion(x, y, radius, damage) {
-    explosions.push({
-        x: x,
-        y: y,
-        radius: 0,
-        maxRadius: radius,
-        damage: damage,
-        alpha: 1,
-        life: 30
-    });
 }
 
 // Инициализация монеток
@@ -156,6 +159,18 @@ function initCoins() {
     }
 }
 
+// Создание врага
+function createEnemy() {
+    // С каждым уровнем враги становятся быстрее
+    const speedMultiplier = 1 + (currentLevel - 1) * 0.3;
+    return {
+        x: Math.random() * (canvas.width - 40),
+        y: Math.random() * (canvas.height - 40),
+        size: 35,
+        speed: (1 + Math.random() * 1.5) * speedMultiplier
+    };
+}
+
 // Инициализация врагов
 function initEnemies() {
     enemies = [];
@@ -164,10 +179,52 @@ function initEnemies() {
     }
 }
 
+// Создание босса
+function createBoss() {
+    return {
+        x: canvas.width / 2 - 60,
+        y: -120,
+        size: 120,
+        speed: 2,
+        health: 100 + currentLevel * 20,
+        maxHealth: 100 + currentLevel * 20,
+        phase: 'enter',
+        shootTimer: 0,
+        shootDelay: 60,
+        explodeTimer: 0
+    };
+}
+
+// Создание взрыва
+function createExplosion(x, y, maxRadius, damage) {
+    explosions.push({
+        x: x,
+        y: y,
+        radius: 0,
+        maxRadius: maxRadius,
+        life: 30,
+        alpha: 1,
+        damage: damage
+    });
+}
+
+// ==================== ФУНКЦИИ ИГРЫ ====================
+
+// Обновление счёта
+function updateScore() {
+    let text = `Уровень: ${currentLevel}/${maxLevels} | Счёт: ${score} | Жизни: ${player.lives} | Монет: ${coinsToWin - coinsCollected}/${coinsToWin}`;
+    if (boss) {
+        text += ` | БОСС: ${boss.health}/${boss.maxHealth}`;
+    }
+    if (gameState === 'playing') {
+        scoreElement.textContent = text;
+    }
+}
+
 // Сброс игрока
 function resetPlayer() {
-    player.x = 400;
-    player.y = 300;
+    player.x = canvas.width / 2 - player.size / 2;
+    player.y = canvas.height / 2 - player.size / 2;
     player.lives = 3;
     player.invincible = false;
     player.invincibleTime = 0;
@@ -186,27 +243,8 @@ function resetGame() {
     initEnemies();
     boss = null;
     enemiesKilled = 0;
-    updateEnemiesToBoss();
-    updateScore();
-}
-
-// Обновление количества врагов до босса в зависимости от уровня
-function updateEnemiesToBoss() {
-    // С каждым уровнем боссы появляются чаще
     enemiesToSpawnBoss = Math.max(5, 15 - (currentLevel - 1) * 3);
-}
-
-// Обновление счёта
-function updateScore() {
-    let text = `Уровень: ${currentLevel}/${maxLevels} | Счёт: ${score} | Жизни: ${player.lives} | Монет: ${coinsToWin - coinsCollected}`;
-    if (boss) {
-        text += ` | БОСС: ${boss.health}/${boss.maxHealth}`;
-    }
-    if (gameState === 'playing') {
-        scoreElement.textContent = text;
-    } else {
-        scoreElement.textContent = `Уровень: ${currentLevel} | Счёт: ${score} | Жизни: ${player.lives}`;
-    }
+    updateScore();
 }
 
 // Показать главное меню
@@ -242,16 +280,16 @@ function showLevelMenu() {
 // Показать победу (прохождение всех уровней)
 function showWinMenu() {
     gameState = 'won';
-    document.getElementById('winScore').textContent = `Ваш счёт: ${score}`;
-    document.getElementById('winLevel').textContent = `Пройдено уровней: ${currentLevel}/${maxLevels}`;
+    document.getElementById('winScore').textContent = `${score}`;
+    document.getElementById('winLevel').textContent = `${currentLevel}/${maxLevels}`;
     winMenu.classList.remove('menu-hidden');
 }
 
 // Показать проигрыш
 function showGameOverMenu() {
     gameState = 'gameover';
-    document.getElementById('finalScore').textContent = `Ваш счёт: ${score}`;
-    document.getElementById('finalLevel').textContent = `Уровень: ${currentLevel}`;
+    document.getElementById('finalScore').textContent = `${score}`;
+    document.getElementById('finalLevel').textContent = `${currentLevel}`;
     gameOverMenu.classList.remove('menu-hidden');
 }
 
@@ -277,7 +315,7 @@ function nextLevel() {
     resetPlayer();
     initCoins();
     initEnemies();
-    updateEnemiesToBoss();
+    enemiesToSpawnBoss = Math.max(5, 15 - (currentLevel - 1) * 3);
     
     if (currentLevel > maxLevels) {
         showWinMenu();
@@ -288,20 +326,26 @@ function nextLevel() {
     }
 }
 
+// Проверка победы на уровне
+function checkLevelWin() {
+    if (coinsCollected >= coinsToWin && !boss) {
+        if (currentLevel >= maxLevels) {
+            showWinMenu();
+        } else {
+            showLevelMenu();
+        }
+    }
+}
+
 // Обработчики событий клавиатуры
 document.addEventListener('keydown', (e) => {
+    // Проверяем, есть ли клавиша в объекте keys
     if (keys.hasOwnProperty(e.key)) {
         keys[e.key] = true;
     }
-});
 
-document.addEventListener('keyup', (e) => {
-    if (keys.hasOwnProperty(e.key)) {
-        keys[e.key] = false;
-    }
-    
-    // Пауза на отпускание P
-    if ((e.key === 'p' || e.key === 'P')) {
+    // Пауза на P
+    if (e.key === 'p' || e.key === 'P') {
         if (gameState === 'playing') {
             showPauseMenu();
         } else if (gameState === 'paused') {
@@ -310,9 +354,15 @@ document.addEventListener('keyup', (e) => {
         }
     }
     
-    // Рестарт
+    // Рестарт на R
     if ((e.key === 'r' || e.key === 'R') && gameState === 'playing') {
         startGame();
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (keys.hasOwnProperty(e.key)) {
+        keys[e.key] = false;
     }
 });
 
@@ -372,32 +422,26 @@ function bossShoot(boss) {
     });
 }
 
-// Проверка победы на уровне
-function checkLevelWin() {
-    if (coinsCollected >= coinsToWin && !boss) {
-        if (currentLevel >= maxLevels) {
-            showWinMenu();
-        } else {
-            showLevelMenu();
-        }
-    }
-}
-
 // Обновление состояния игры
 function update() {
     if (gameState !== 'playing') return;
     
     // Движение игрока
-    if (keys.ArrowUp || keys.w || keys.W) {
+    const up = keys.ArrowUp || keys.w || keys.W || mobileKeys.ArrowUp;
+    const down = keys.ArrowDown || keys.s || keys.S || mobileKeys.ArrowDown;
+    const left = keys.ArrowLeft || keys.a || keys.A || mobileKeys.ArrowLeft;
+    const right = keys.ArrowRight || keys.d || keys.D || mobileKeys.ArrowRight;
+    
+    if (up) {
         player.y = Math.max(0, player.y - player.speed);
     }
-    if (keys.ArrowDown || keys.s || keys.S) {
+    if (down) {
         player.y = Math.min(canvas.height - player.size, player.y + player.speed);
     }
-    if (keys.ArrowLeft || keys.a || keys.A) {
+    if (left) {
         player.x = Math.max(0, player.x - player.speed);
     }
-    if (keys.ArrowRight || keys.d || keys.D) {
+    if (right) {
         player.x = Math.min(canvas.width - player.size, player.x + player.speed);
     }
 

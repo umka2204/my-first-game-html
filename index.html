@@ -2,60 +2,70 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Игра-бродилка</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Моя первая игра</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="game-container">
-        <div id="score">Счёт: 0 | Жизни: 3 | Монет до победы: 20</div>
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
-        <div id="instructions">
-            Управление: стрелки/WASD - движение | ЛКМ - стрельба | P - пауза | R - рестарт | Убивай 15 врагов для босса!
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- Счёт игры -->
+    <div id="score"></div>
+    
+    <!-- Мобильное управление -->
+    <div id="mobileControls">
+        <div class="control-row">
+            <div class="control-button" id="btnUp">⬆️</div>
         </div>
-        
-        <!-- Главное меню -->
-        <div id="mainMenu" class="menu">
-            <h1 class="menu-title">ИГРА-БРОДИЛКА</h1>
-            <p class="menu-subtitle">Собери 20 монет и победи всех врагов!</p>
-            <button id="startBtn" class="menu-btn">Начать игру</button>
-            <p class="menu-hint">Управление: WASD/стрелки - движение | ЛКМ - стрельба</p>
-        </div>
-        
-        <!-- Меню перехода на следующий уровень -->
-        <div id="levelMenu" class="menu menu-hidden">
-            <h1 class="menu-title menu-win">УРОВЕНЬ ПРОЙДЕН!</h1>
-            <p class="menu-subtitle" id="levelNumber">Уровень 1</p>
-            <p class="menu-subtitle" id="levelEnemies">Врагов до босса: 15</p>
-            <button id="nextLevelBtn" class="menu-btn">Следующий уровень</button>
-        </div>
-        
-        <!-- Меню паузы -->
-        <div id="pauseMenu" class="menu menu-hidden">
-            <h1 class="menu-title">ПАУЗА</h1>
-            <button id="resumeBtn" class="menu-btn">Продолжить</button>
-            <button id="restartBtn" class="menu-btn">Начать заново</button>
-            <button id="exitBtn" class="menu-btn">В главное меню</button>
-        </div>
-        
-        <!-- Меню победы -->
-        <div id="winMenu" class="menu menu-hidden">
-            <h1 class="menu-title menu-win">ПОБЕДА!</h1>
-            <p class="menu-subtitle" id="winScore">Ваш счёт: 0</p>
-            <p class="menu-subtitle" id="winLevel">Пройдено уровней: 5/5</p>
-            <button id="playAgainBtn" class="menu-btn">Играть снова</button>
-            <button id="exitWinBtn" class="menu-btn">В главное меню</button>
-        </div>
-        
-        <!-- Меню проигрыша -->
-        <div id="gameOverMenu" class="menu menu-hidden">
-            <h1 class="menu-title menu-lose">ИГРА ОКОНЧЕНА</h1>
-            <p class="menu-subtitle" id="finalScore">Ваш счёт: 0</p>
-            <p class="menu-subtitle" id="finalLevel">Уровень: 1</p>
-            <button id="retryBtn" class="menu-btn">Попробовать снова</button>
-            <button id="exitLoseBtn" class="menu-btn">В главное меню</button>
+        <div class="control-row">
+            <div class="control-button" id="btnLeft">⬅️</div>
+            <div class="control-button" id="btnDown">⬇️</div>
+            <div class="control-button" id="btnRight">➡️</div>
         </div>
     </div>
+
+    <!-- Главное меню -->
+    <div id="mainMenu" class="menu">
+        <h1>Моя первая игра</h1>
+        <p>Собирай монеты, избегай врагов!</p>
+        <button id="startBtn">Начать игру</button>
+        <p class="controls-hint">Управление: стрелки или WASD | P - пауза | R - рестарт | Клик - стрельба</p>
+    </div>
+
+    <!-- Меню паузы -->
+    <div id="pauseMenu" class="menu menu-hidden">
+        <h2>Пауза</h2>
+        <button id="resumeBtn">Продолжить</button>
+        <button id="restartBtn">Начать заново</button>
+        <button id="exitBtn">В меню</button>
+    </div>
+
+    <!-- Меню уровня -->
+    <div id="levelMenu" class="menu menu-hidden">
+        <h2>Уровень <span id="levelNumber"></span></h2>
+        <p>Врагов до босса: <span id="levelEnemies"></span></p>
+        <button id="nextLevelBtn">Следующий уровень</button>
+    </div>
+
+    <!-- Меню победы -->
+    <div id="winMenu" class="menu menu-hidden">
+        <h2>🎉 Победа! 🎉</h2>
+        <p>Вы прошли все уровни!</p>
+        <p>Ваш счёт: <span id="winScore"></span></p>
+        <p>Пройдено уровней: <span id="winLevel"></span></p>
+        <button id="playAgainBtn">Играть снова</button>
+        <button id="exitWinBtn">В меню</button>
+    </div>
+
+    <!-- Меню проигрыша -->
+    <div id="gameOverMenu" class="menu menu-hidden">
+        <h2>💀 Игра окончена 💀</h2>
+        <p>Ваш счёт: <span id="finalScore"></span></p>
+        <p>Уровень: <span id="finalLevel"></span></p>
+        <button id="retryBtn">Попробовать снова</button>
+        <button id="exitLoseBtn">В меню</button>
+    </div>
+
     <script src="game.js"></script>
 </body>
 </html>

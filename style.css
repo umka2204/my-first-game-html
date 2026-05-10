@@ -5,12 +5,98 @@
 }
 
 body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #1a1a2e;
+    touch-action: none;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    font-family: 'Arial', sans-serif;
+}
+
+#score {
+    color: #ffd700;
+    font-size: 18px;
+    padding: 10px;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    line-height: 1.8;
+}
+
+#gameCanvas {
+    display: block;
+    margin: 0 auto;
+    border: 4px solid #4a4a6a;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    background: #2d5a27;
+}
+
+/* Мобильное управление */
+#mobileControls {
+    display: none;
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    user-select: none;
+    pointer-events: auto;
+}
+
+.control-row {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 8px 0;
+}
+
+.control-button {
+    width: 70px;
+    height: 70px;
+    background-color: rgba(255, 255, 255, 0.25);
+    border: 3px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: white;
+    touch-action: manipulation;
+    cursor: pointer;
+    transition: background-color 0.1s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.control-button:active, .control-button.active {
+    background-color: rgba(255, 255, 255, 0.5);
+    transform: scale(0.95);
+}
+
+/* Показываем управление только на мобильных устройствах */
+@media (max-width: 768px) {
+    #mobileControls {
+        display: block;
+    }
+    
+    #score {
+        font-size: 14px;
+        left: 10px;
+        top: 10px;
+    }
+    
+    #gameCanvas {
+        width: 100vw;
+        height: auto;
+        border-radius: 5px;
+    }
 }
 
 #game-container {
@@ -41,7 +127,7 @@ body {
 
 /* Стили для меню */
 .menu {
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -52,10 +138,63 @@ body {
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
     border: 3px solid #4a4a6a;
     min-width: 350px;
+    z-index: 100;
 }
 
 .menu-hidden {
     display: none;
+}
+
+.menu h1 {
+    color: #3498db;
+    font-size: 48px;
+    margin-bottom: 15px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.menu h2 {
+    color: #3498db;
+    font-size: 36px;
+    margin-bottom: 15px;
+}
+
+.menu p {
+    color: #ffffff;
+    font-size: 18px;
+    margin-bottom: 10px;
+    opacity: 0.9;
+}
+
+.menu button {
+    display: block;
+    width: 100%;
+    padding: 15px 30px;
+    margin: 10px 0;
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.menu button:hover {
+    background: linear-gradient(135deg, #2980b9, #3498db);
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(52, 152, 219, 0.6);
+}
+
+.menu button:active {
+    transform: scale(0.98);
+}
+
+.controls-hint {
+    color: #ffd700;
+    font-size: 14px;
+    margin-top: 20px;
+    opacity: 0.8;
 }
 
 .menu-title {
