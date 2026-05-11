@@ -113,6 +113,8 @@ let enemies = [];
 let projectiles = [];
 let enemyProjectiles = [];
 let explosions = [];
+let particles = [];
+let stars = [];
 let boss = null;
 
 // Мышь
@@ -135,6 +137,16 @@ const shopIndicator = document.getElementById('shopIndicator');
 
 // Состояние игры
 let gameState = 'menu';
+
+// Достижения
+let achievements = {
+    firstShot: false,
+    firstBoss: false,
+    levelMaster: false,
+    legend: false,
+    maxPower: false,
+    rich: false
+};
 
 // Магазин улучшений
 let shopAvailable = false;
@@ -164,7 +176,7 @@ const mobileKeys = {
     ArrowLeft: false,
     ArrowRight: false
 };
-
+    
 // Константы количества объектов
 const maxCoins = GAME_CONFIG.MAX_COINS;
 const maxEnemies = GAME_CONFIG.MAX_ENEMIES;
@@ -219,9 +231,75 @@ function setupMobileControl() {
             });
         }
     });
+    
+    // Кнопка стрельбы
+    const fireButton = document.getElementById('btnFire');
+    if (fireButton) {
+        const handleFire = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (gameState === 'playing') {
+                shootProjectileToMouse();
+            }
+        };
+        
+        fireButton.addEventListener('touchstart', handleFire, { passive: false });
+        fireButton.addEventListener('mousedown', handleFire);
+        
+        fireButton.addEventListener('touchend', () => {
+            fireButton.classList.remove('active');
+        });
+        fireButton.addEventListener('touchcancel', () => {
+            fireButton.classList.remove('active');
+        });
+        fireButton.addEventListener('mouseup', () => {
+            fireButton.classList.remove('active');
+        });
+        fireButton.addEventListener('mouseleave', () => {
+            fireButton.classList.remove('active');
+        });
+        
+        fireButton.addEventListener('touchstart', () => {
+            fireButton.classList.add('active');
+        }, { passive: false });
+    }
 }
 setupMobileControl();
 
+// ==================== ФОНОВЫЕ ЗВЁЗДЫ ====================
+function initStars() {
+    stars = [];
+    for (let i = 0; i < 100; i++) {
+        stars.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: Math.random() * 2 + 0.5,
+            speed: Math.random() * 0.5 + 0.1,
+            brightness: Math.random()
+        });
+    }
+}
+
+function updateStars() {
+    stars.forEach(star => {
+        star.y += star.speed;
+        if (star.y > canvas.height) {
+            star.y = 0;
+            star.x = Math.random() * canvas.width;
+        }
+        star.brightness = 0.5 + Math.sin(Date.now() * 0.003 + star.x) * 0.5;
+    });
+}
+
+function drawStars() {
+    stars.forEach(star => {
+        ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness})`;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+        
 // ==================== ФУНКЦИИ СОЗДАНИЯ ОБЪЕКТОВ ====================
 
 // ==================== ЗВУКОВЫЕ ЭФФЕКТЫ ====================
@@ -357,6 +435,50 @@ function createExplosion(x, y, maxRadius, damage) {
     });
 }
 
+// Создание частиц
+function createParticles(x, y, color, count = 8) {
+    for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count;
+        const speed = Math.random() * 3 + 2;
+        particles.push({
+            x: x,
+            y: y,
+            dx: Math.cos(angle) * speed,
+            dy: Math.sin(angle) * speed,
+            size: Math.random() * 4 + 2,
+            color: color,
+            life: 30,
+            alpha: 1
+        });
+    }
+}
+
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.dx;
+        p.y += p.dy;
+        p.dx *= 0.95;
+        p.dy *= 0.95;
+        p.life--;
+        p.alpha = p.life / 30;
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+        }
+    }
+}
+
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.alpha;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    });
+}
+        
 // ==================== ФУНКЦИИ ИГРЫ ====================
 
 // Обновление счёта
@@ -400,6 +522,7 @@ function resetGame() {
     projectiles = [];
     enemyProjectiles = [];
     explosions = [];
+    particles = [];
     
     // Сброс улучшений
     player.upgrades = {
@@ -414,6 +537,7 @@ function resetGame() {
     resetPlayer();
     initCoins();
     initEnemies();
+    initStars();
     boss = null;
     enemiesKilled = 0;
     enemiesToSpawnBoss = GAME_CONFIG.ENEMIES_TO_SPAWN_BOSS_BASE - (currentLevel - 1) * GAME_CONFIG.ENEMIES_KILLED_PER_BOSS;
@@ -480,6 +604,13 @@ function buyUpgrade(upgradeId) {
     if (player.upgrades[upgradeId] >= upgrade.maxLevel) {
         SoundEffects.playLevelComplete();
     }
+    
+    // Проверка достижения "Максимум силы"
+    const allMaxed = Object.values(player.upgrades).every(level => level >= GAME_CONFIG.MAX_UPGRADE_LEVEL);
+    if (allMaxed && !achievements.maxPower) {
+        achievements.maxPower = true;
+        showAchievement('Максимум силы', 'Все улучшения на максимуме!');
+    }
 }
     
 // Показать магазин улучшений
@@ -503,6 +634,36 @@ function continueToNextLevel() {
     nextLevel();
 }
     
+// Получить описание текущего уровня улучшения
+function getUpgradeDescription(upgradeId, currentLevel) {
+    const upgrade = UPGRADE_TYPES[upgradeId];
+    if (!upgrade) return '';
+    
+    const nextLevel = currentLevel + 1;
+    
+    switch(upgradeId) {
+        case 'speed':
+            const nextSpeed = upgrade.baseValue + nextLevel * upgrade.increment;
+            return `Скорость: ${upgrade.baseValue + (currentLevel - 1) * upgrade.increment} → ${nextSpeed}`;
+        case 'damage':
+            const nextDamage = 10 * (1 + nextLevel * 0.2);
+            const currentDamage = 10 * (1 + (currentLevel - 1) * 0.2);
+            return `Урон: ${Math.round(currentDamage)} → ${Math.round(nextDamage)}`;
+        case 'fireRate':
+            const nextFireRate = Math.max(100, upgrade.baseValue + nextLevel * upgrade.increment);
+            const currentFireRate = Math.max(100, upgrade.baseValue + (currentLevel - 1) * upgrade.increment);
+            return `Перезарядка: ${currentFireRate}мс → ${nextFireRate}мс`;
+        case 'health':
+            const nextHealth = upgrade.baseValue + nextLevel * upgrade.increment;
+            return `Жизни: ${upgrade.baseValue + (currentLevel - 1) * upgrade.increment} → ${nextHealth}`;
+        case 'projectileSize':
+            const nextSize = upgrade.baseValue + nextLevel * upgrade.increment;
+            return `Размер снаряда: ${upgrade.baseValue + (currentLevel - 1) * upgrade.increment} → ${nextSize}`;
+        default:
+            return upgrade.description;
+    }
+}
+    
 // Отрисовка магазина
 function renderShop() {
     const container = document.getElementById('upgradeContainer');
@@ -515,6 +676,8 @@ function renderShop() {
         const isMaxed = currentLevel >= upgrade.maxLevel;
         const canAfford = coinsForShop >= GAME_CONFIG.UPGRADE_COST;
         
+        const upgradeDesc = isMaxed ? 'Максимальный уровень' : getUpgradeDescription(upgrade.id, currentLevel);
+        
         const upgradeDiv = document.createElement('div');
         upgradeDiv.className = 'upgrade-item';
         upgradeDiv.innerHTML = `
@@ -524,6 +687,7 @@ function renderShop() {
                 <span class="upgrade-level">Ур. ${currentLevel}/${upgrade.maxLevel}</span>
             </div>
             <p class="upgrade-desc">${upgrade.description}</p>
+            <p class="upgrade-change" style="color: #2ecc71; font-size: 12px; margin-bottom: 8px;">${upgradeDesc}</p>
             <button class="upgrade-btn ${isMaxed ? 'upgrade-maxed' : ''} ${!canAfford && !isMaxed ? 'upgrade-unaffordable' : ''}" 
                     ${isMaxed ? 'disabled' : ''}>
                 ${isMaxed ? 'Максимум' : `Купить (${GAME_CONFIG.UPGRADE_COST} 🪙)`}
@@ -562,9 +726,40 @@ function showMainMenu() {
     player.fireRate = 300;
     player.projectileSize = 8;
     
+    // Сброс достижений для новой игры
+    achievements = {
+        firstShot: false,
+        firstBoss: false,
+        levelMaster: false,
+        legend: false,
+        maxPower: false,
+        rich: false
+    };
+    
     updateScore();
 }
     
+// Показать уведомление о достижении
+function showAchievement(title, description) {
+    const notification = document.createElement('div');
+    notification.className = 'achievement-notification';
+    notification.innerHTML = `
+        <span>🏆</span>
+        <div>
+            <div style="font-size: 14px; opacity: 0.9;">Достижение!</div>
+            <div style="font-size: 18px;">${title}</div>
+            <div style="font-size: 12px; opacity: 0.8;">${description}</div>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.remove();
+    }, 3500);
+    
+    SoundEffects.playLevelComplete();
+}
+
 // Показать паузу
 function showPauseMenu() {
     gameState = 'paused';
@@ -590,6 +785,12 @@ function showWinMenu() {
     document.getElementById('winScore').textContent = `${score}`;
     document.getElementById('winLevel').textContent = `${currentLevel}/${maxLevels}`;
     winMenu.classList.remove('menu-hidden');
+    
+    // Достижение легенда
+    if (!achievements.legend) {
+        achievements.legend = true;
+        showAchievement('Легенда', 'Пройти все 5 уровней!');
+    }
 }
 
 // Показать проигрыш
@@ -713,6 +914,12 @@ function shootProjectileToMouse() {
     lastShot = now;
     SoundEffects.playShoot();
     
+    // Первое достижение
+    if (!achievements.firstShot) {
+        achievements.firstShot = true;
+        showAchievement('Первый выстрел', 'Убить первого врага');
+    }
+    
     const angle = Math.atan2(
         mouseY - (player.y + player.size / 2),
         mouseX - (player.x + player.size / 2)
@@ -791,7 +998,15 @@ function update() {
                 projectiles.splice(i, 1);
                 score += 25;
                 SoundEffects.playEnemyHit();
+                createParticles(enemy.x + enemy.size / 2, enemy.y + enemy.size / 2, '#e74c3c', 10);
                 enemiesKilled++;
+                
+                // Первое убийство
+                if (enemiesKilled === 1 && !achievements.firstShot) {
+                    achievements.firstShot = true;
+                    showAchievement('Первый выстрел', 'Убить первого врага');
+                }
+                
                 updateScore();
                 enemies.push(createEnemy());
                 
@@ -799,6 +1014,12 @@ function update() {
                 if (enemiesKilled % enemiesToSpawnBoss === 0 && !boss && enemiesKilled > 0) {
                     boss = createBoss();
                     SoundEffects.playBossSpawn();
+                    
+                    // Достижение за первого босса
+                    if (currentLevel === 1 && !achievements.firstBoss) {
+                        achievements.firstBoss = true;
+                        showAchievement('Охотник на боссов', 'Победить первого босса');
+                    }
                 }
                 break;
             }
@@ -814,10 +1035,18 @@ function update() {
                 boss.health -= 10;
                 projectiles.splice(i, 1);
                 SoundEffects.playBossHit();
+                createParticles(projectiles[i].x, projectiles[i].y, '#8e44ad', 5);
                 updateScore();
                 
                 if (boss.health <= 0) {
                     score += 200 + (currentLevel - 1) * 50; // Больше очков за босса на высоких уровнях
+                    
+                    // Достижение за убийство босса
+                    if (currentLevel === 1 && !achievements.firstBoss) {
+                        achievements.firstBoss = true;
+                        showAchievement('Охотник на боссов', 'Победить первого босса');
+                    }
+                    
                     boss = null;
                     updateScore();
                 }
@@ -844,6 +1073,7 @@ function update() {
         if (distance < proj.size + player.size / 2 && !player.invincible) {
             player.lives -= proj.damage;
             SoundEffects.playPlayerHit();
+            createParticles(player.x + player.size / 2, player.y + player.size / 2, '#3498db', 12);
             updateScore();
             enemyProjectiles.splice(i, 1);
             
@@ -871,6 +1101,7 @@ function update() {
         if (distance < player.size / 2 + enemy.size / 2 && !player.invincible) {
             player.lives--;
             SoundEffects.playPlayerHit();
+            createParticles(player.x + player.size / 2, player.y + player.size / 2, '#3498db', 12);
             updateScore();
             
             if (player.lives <= 0) {
@@ -928,6 +1159,11 @@ function update() {
         exp.life--;
         exp.alpha = exp.life / 30;
         
+        // Создаём частицы при взрыве
+        if (exp.radius > exp.maxRadius * 0.5 && exp.life < 25) {
+            createParticles(exp.x, exp.y, '#ff6b35', 3);
+        }
+        
         const dx = player.x + player.size / 2 - exp.x;
         const dy = player.y + player.size / 2 - exp.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -967,6 +1203,14 @@ function update() {
             coinsCollected++;
             coinsForShop++;
             SoundEffects.playCoin();
+            createParticles(coin.x, coin.y, '#ffd700', 6);
+            
+            // Достижение богатай
+            if (coinsForShop >= 50 && !achievements.rich) {
+                achievements.rich = true;
+                showAchievement('Богатай', 'Накопить 50 монет');
+            }
+            
             updateScore();
             coins.push(createCoin());
             
@@ -980,11 +1224,35 @@ function drawPlayer() {
         return;
     }
     
+    // Вычисляем угол направления на мышь
+    const angle = Math.atan2(
+        mouseY - (player.y + player.size / 2),
+        mouseX - (player.x + player.size / 2)
+    );
+    
+    ctx.save();
+    ctx.translate(player.x + player.size / 2, player.y + player.size / 2);
+    ctx.rotate(angle);
+    
+    // Тело игрока (космический корабль)
     ctx.fillStyle = player.color;
     ctx.beginPath();
-    ctx.arc(player.x + player.size / 2, player.y + player.size / 2, player.size / 2, 0, Math.PI * 2);
+    ctx.moveTo(20, 0);
+    ctx.lineTo(-15, -15);
+    ctx.lineTo(-10, 0);
+    ctx.lineTo(-15, 15);
+    ctx.closePath();
     ctx.fill();
     
+    // Кабина
+    ctx.fillStyle = '#85c1e9';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+    
+    // Глаза (для милоты)
     ctx.fillStyle = 'white';
     ctx.beginPath();
     ctx.arc(player.x + player.size / 3, player.y + player.size / 3, 5, 0, Math.PI * 2);
@@ -1004,76 +1272,130 @@ function drawPlayer() {
         ctx.arc(player.x + player.size / 2, player.y + player.size / 2, player.size / 2 + 5, 0, Math.PI * 2);
         ctx.stroke();
     }
+    
+    // Огонь из двигателя
+    if (Math.random() > 0.5) {
+        ctx.fillStyle = `rgba(255, ${Math.random() * 150 + 100}, 0, 0.8)`;
+        ctx.beginPath();
+        ctx.moveTo(player.x + player.size / 2 - 5, player.y + player.size - 5);
+        ctx.lineTo(player.x + player.size / 2 + 5, player.y + player.size - 5);
+        ctx.lineTo(player.x + player.size / 2, player.y + player.size + 10 + Math.random() * 10);
+        ctx.closePath();
+        ctx.fill();
+    }
 }
     
 function drawEnemies() {
     enemies.forEach(enemy => {
+        ctx.save();
+        ctx.translate(enemy.x + enemy.size / 2, enemy.y + enemy.size / 2);
+        
+        // Вращение врага
+        ctx.rotate(Date.now() * 0.002);
+        
+        // Тело врага
         ctx.fillStyle = '#e74c3c';
         ctx.beginPath();
-        ctx.arc(enemy.x + enemy.size / 2, enemy.y + enemy.size / 2, enemy.size / 2, 0, Math.PI * 2);
+        for (let i = 0; i < 6; i++) {
+            const angle = (i * 2 * Math.PI) / 6;
+            const r = enemy.size / 2;
+            const x = Math.cos(angle) * r;
+            const y = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
         ctx.fill();
         
+        // Глаза
         ctx.fillStyle = 'black';
         ctx.beginPath();
-        ctx.arc(enemy.x + enemy.size / 3, enemy.y + enemy.size / 3, 5, 0, Math.PI * 2);
-        ctx.arc(enemy.x + enemy.size * 2 / 3, enemy.y + enemy.size / 3, 5, 0, Math.PI * 2);
+        ctx.arc(-enemy.size / 4, -enemy.size / 6, 4, 0, Math.PI * 2);
+        ctx.arc(enemy.size / 4, -enemy.size / 6, 4, 0, Math.PI * 2);
         ctx.fill();
         
+        // Злое выражение
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(enemy.x + enemy.size / 4, enemy.y + enemy.size / 4);
-        ctx.lineTo(enemy.x + enemy.size / 2, enemy.y + enemy.size / 3);
-        ctx.moveTo(enemy.x + enemy.size * 3 / 4, enemy.y + enemy.size / 4);
-        ctx.lineTo(enemy.x + enemy.size / 2, enemy.y + enemy.size / 3);
+        ctx.moveTo(-enemy.size / 4, enemy.size / 4);
+        ctx.lineTo(0, enemy.size / 5);
+        ctx.lineTo(enemy.size / 4, enemy.size / 4);
         ctx.stroke();
         
-        ctx.beginPath();
-        ctx.moveTo(enemy.x + enemy.size / 3, enemy.y + enemy.size * 2 / 3);
-        ctx.quadraticCurveTo(enemy.x + enemy.size / 2, enemy.y + enemy.size * 0.75, enemy.x + enemy.size * 2 / 3, enemy.y + enemy.size * 2 / 3);
-        ctx.stroke();
+        ctx.restore();
     });
 }
 
 function drawBoss() {
     if (!boss) return;
     
+    ctx.save();
+    ctx.translate(boss.x + boss.size / 2, boss.y + boss.size / 2);
+    
+    // Пульсация босса
+    const pulse = Math.sin(Date.now() * 0.005) * 5;
+    
+    // Основное тело
     ctx.fillStyle = '#8e44ad';
     ctx.beginPath();
-    ctx.arc(boss.x + boss.size / 2, boss.y + boss.size / 2, boss.size / 2, 0, Math.PI * 2);
+    for (let i = 0; i < 8; i++) {
+        const angle = (i * 2 * Math.PI) / 8;
+        const r = boss.size / 2 + (i % 2 === 0 ? pulse : -pulse);
+        const x = Math.cos(angle) * r;
+        const y = Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
     ctx.fill();
     
-    ctx.fillStyle = '#333';
-    ctx.fillRect(boss.x, boss.y - 20, boss.size, 10);
-    ctx.fillStyle = '#e74c3c';
-    ctx.fillRect(boss.x, boss.y - 20, boss.size * (boss.health / boss.maxHealth), 10);
+    // Внутреннее кольцо
+    ctx.fillStyle = '#9b59b6';
+    ctx.beginPath();
+    ctx.arc(0, 0, boss.size / 3, 0, Math.PI * 2);
+    ctx.fill();
     
+    // Глаза босса
     ctx.fillStyle = '#f1c40f';
     ctx.beginPath();
-    ctx.arc(boss.x + boss.size / 3, boss.y + boss.size / 3, 12, 0, Math.PI * 2);
-    ctx.arc(boss.x + boss.size * 2 / 3, boss.y + boss.size / 3, 12, 0, Math.PI * 2);
+    ctx.arc(-boss.size / 4, -boss.size / 6, 15, 0, Math.PI * 2);
+    ctx.arc(boss.size / 4, -boss.size / 6, 15, 0, Math.PI * 2);
     ctx.fill();
     
-    ctx.fillStyle = 'black';
+    // Зрачки
+    ctx.fillStyle = 'red';
     ctx.beginPath();
-    ctx.arc(boss.x + boss.size / 3, boss.y + boss.size / 3, 5, 0, Math.PI * 2);
-    ctx.arc(boss.x + boss.size * 2 / 3, boss.y + boss.size / 3, 5, 0, Math.PI * 2);
+    ctx.arc(-boss.size / 4, -boss.size / 6, 6, 0, Math.PI * 2);
+    ctx.arc(boss.size / 4, -boss.size / 6, 6, 0, Math.PI * 2);
     ctx.fill();
     
-    ctx.strokeStyle = '#f1c40f';
-    ctx.lineWidth = 3;
+    // Рот босса
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(boss.x + boss.size / 2, boss.y + boss.size / 2 + 10, 15, 0, Math.PI, false);
+    ctx.arc(0, boss.size / 6, boss.size / 5, 0, Math.PI, false);
     ctx.stroke();
+    
+    ctx.restore();
+    
+    // Полоска здоровья
+    ctx.fillStyle = '#333';
+    ctx.fillRect(boss.x, boss.y - 30, boss.size, 15);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(boss.x + 2, boss.y - 28, (boss.size - 4) * (boss.health / boss.maxHealth), 11);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boss.x, boss.y - 30, boss.size, 15);
     
     if (boss.explodeTimer > 0) {
         ctx.fillStyle = `rgba(255, 0, 0, ${boss.explodeTimer / 120})`;
         ctx.beginPath();
-        ctx.arc(boss.x + boss.size / 2, boss.y + boss.size / 2, boss.size / 2 + 5, 0, Math.PI * 2);
+        ctx.arc(boss.x + boss.size / 2, boss.y + boss.size / 2, boss.size / 2 + 10, 0, Math.PI * 2);
         ctx.fill();
     }
 }
-
+    
 function drawCoins() {
     coins.forEach(coin => {
         ctx.fillStyle = '#ffd700';
@@ -1134,44 +1456,17 @@ function drawExplosions() {
 }
 
 function drawBackground() {
-    ctx.fillStyle = '#2d5a27';
+    // Космический градиент
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#0a0a1a');
+    gradient.addColorStop(0.5, '#1a1a3a');
+    gradient.addColorStop(1, '#0a0a2a');
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = '#5a5a5a';
-    ctx.beginPath();
-    ctx.ellipse(100, 100, 30, 20, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.beginPath();
-    ctx.ellipse(700, 500, 40, 25, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.beginPath();
-    ctx.ellipse(650, 150, 25, 15, 0, 0, Math.PI * 2);
-    ctx.fill();
-    
-    function drawFlower(x, y) {
-        ctx.fillStyle = '#ff69b4';
-        for (let i = 0; i < 5; i++) {
-            const angle = (i * 2 * Math.PI) / 5;
-            ctx.beginPath();
-            ctx.arc(x + Math.cos(angle) * 8, y + Math.sin(angle) * 8, 5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        ctx.fillStyle = '#ffff00';
-        ctx.beginPath();
-        ctx.arc(x, y, 4, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    
-    drawFlower(200, 200);
-    drawFlower(500, 350);
-    drawFlower(300, 450);
-    drawFlower(600, 250);
     
     // Отрисовка уровня на фоне
     if (gameState === 'playing') {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
         ctx.font = 'bold 100px Arial';
         ctx.textAlign = 'center';
         ctx.fillText(`УРОВЕНЬ ${currentLevel}`, canvas.width / 2, canvas.height / 2);
@@ -1180,14 +1475,18 @@ function drawBackground() {
 
 function gameLoop() {
     update();
+    updateStars();
+    updateParticles();
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
+    drawStars();
     drawCoins();
     drawProjectiles();
     drawEnemies();
     drawBoss();
     drawExplosions();
+    drawParticles();
     drawPlayer();
     
     requestAnimationFrame(gameLoop);
