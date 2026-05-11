@@ -3,53 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Моя первая игра</title>
+    <meta name="description" content="Браузерная игра с уровнями, боссами и мобильным управлением">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>🎮 Моя первая игра | Браузерная игра</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="gameCanvas" aria-label="Игровое поле" role="img"></canvas>
     
     <!-- Счёт игры -->
-    <div id="score"></div>
-    
+    <div id="score">
+        <span id="shopIndicator" class="shop-indicator menu-hidden">🛒 U - Магазин!</span>
+    </div>
+
     <!-- Мобильное управление -->
-    <div id="mobileControls">
+    <div id="mobileControls" role="group" aria-label="Мобильное управление">
         <div class="control-row">
-            <div class="control-button" id="btnUp">⬆️</div>
+            <div class="control-button" id="btnUp" aria-label="Движение вверх">⬆️</div>
         </div>
         <div class="control-row">
-            <div class="control-button" id="btnLeft">⬅️</div>
-            <div class="control-button" id="btnDown">⬇️</div>
-            <div class="control-button" id="btnRight">➡️</div>
+            <div class="control-button" id="btnLeft" aria-label="Движение влево">⬅️</div>
+            <div class="control-button" id="btnDown" aria-label="Движение вниз">⬇️</div>
+            <div class="control-button" id="btnRight" aria-label="Движение вправо">➡️</div>
         </div>
     </div>
 
     <!-- Главное меню -->
-    <div id="mainMenu" class="menu">
-        <h1>Моя первая игра</h1>
+    <div id="mainMenu" class="menu" role="dialog" aria-labelledby="mainMenuTitle">
+        <h1 id="mainMenuTitle">Моя первая игра</h1>
         <p>Собирай монеты, избегай врагов!</p>
-        <button id="startBtn">Начать игру</button>
-        <p class="controls-hint">Управление: стрелки или WASD | P - пауза | R - рестарт | Клик - стрельба</p>
+        <button id="startBtn" aria-label="Начать новую игру">Начать игру</button>
+        <p class="controls-hint">Управление: стрелки или WASD | P - пауза | R - рестарт | Клик - стрельба | U - магазин (когда доступен)</p>
     </div>
 
     <!-- Меню паузы -->
-    <div id="pauseMenu" class="menu menu-hidden">
-        <h2>Пауза</h2>
-        <button id="resumeBtn">Продолжить</button>
-        <button id="restartBtn">Начать заново</button>
-        <button id="exitBtn">В меню</button>
+    <div id="pauseMenu" class="menu menu-hidden" role="dialog" aria-labelledby="pauseMenuTitle">
+        <h2 id="pauseMenuTitle">Пауза</h2>
+        <button id="resumeBtn" aria-label="Продолжить игру">Продолжить</button>
+        <button id="restartBtn" aria-label="Начать игру заново">Начать заново</button>
+        <button id="exitBtn" aria-label="Вернуться в главное меню">В меню</button>
     </div>
 
     <!-- Меню уровня -->
-    <div id="levelMenu" class="menu menu-hidden">
-        <h2>Уровень <span id="levelNumber"></span></h2>
+    <div id="levelMenu" class="menu menu-hidden" role="dialog" aria-labelledby="levelMenuTitle">
+        <h2 id="levelMenuTitle">Уровень <span id="levelNumber"></span></h2>
         <p>Врагов до босса: <span id="levelEnemies"></span></p>
         <button id="nextLevelBtn">Следующий уровень</button>
     </div>
 
     <!-- Меню победы -->
-    <div id="winMenu" class="menu menu-hidden">
-        <h2>🎉 Победа! 🎉</h2>
+    <div id="winMenu" class="menu menu-hidden" role="dialog" aria-labelledby="winMenuTitle">
+        <h2 id="winMenuTitle">🎉 Победа! 🎉</h2>
         <p>Вы прошли все уровни!</p>
         <p>Ваш счёт: <span id="winScore"></span></p>
         <p>Пройдено уровней: <span id="winLevel"></span></p>
@@ -58,12 +62,21 @@
     </div>
 
     <!-- Меню проигрыша -->
-    <div id="gameOverMenu" class="menu menu-hidden">
-        <h2>💀 Игра окончена 💀</h2>
+    <div id="gameOverMenu" class="menu menu-hidden" role="alert" aria-labelledby="gameOverMenuTitle">
+        <h2 id="gameOverMenuTitle">💀 Игра окончена 💀</h2>
         <p>Ваш счёт: <span id="finalScore"></span></p>
         <p>Уровень: <span id="finalLevel"></span></p>
         <button id="retryBtn">Попробовать снова</button>
         <button id="exitLoseBtn">В меню</button>
+    </div>
+
+    <!-- Магазин улучшений -->
+    <div id="upgradeMenu" class="menu menu-hidden upgrade-menu" role="dialog" aria-labelledby="upgradeMenuTitle">
+        <h2 id="upgradeMenuTitle">🛒 Магазин улучшений</h2>
+        <p class="upgrade-coins">Монет: <span id="upgradeCoins">0</span> 💰</p>
+        <div id="upgradeContainer" class="upgrade-container"></div>
+        <button id="nextLevelUpgradeBtn" class="menu-btn" style="background: linear-gradient(135deg, #27ae60, #2ecc71);">Следующий уровень</button>
+        <button id="closeUpgradeBtn" class="menu-btn" style="background: linear-gradient(135deg, #7f8c8d, #95a5a6);">Продолжить игру</button>
     </div>
 
     <script src="game.js"></script>

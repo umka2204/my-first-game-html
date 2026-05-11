@@ -1,6 +1,73 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+// ==================== КОНСТАНТЫ ИГРЫ ====================
+const GAME_CONFIG = {
+    MAX_LEVELS: 5,
+    COINS_TO_WIN: 10,
+    MAX_COINS: 15,
+    MAX_ENEMIES: 5,
+    PROJECTILE_SPEED: 8,
+    BOSS_PROJECTILE_SPEED: 5,
+    SHOOT_COOLDOWN: 300,
+    INVINCIBLE_DURATION: 2000,
+    BOSS_HEALTH_BASE: 100,
+    BOSS_HEALTH_PER_LEVEL: 20,
+    ENEMIES_TO_SPAWN_BOSS_BASE: 15,
+    ENEMIES_KILLED_PER_BOSS: 3,
+    UPGRADE_COST: 10,
+    MAX_UPGRADE_LEVEL: 5
+};
+
+// Типы улучшений
+const UPGRADE_TYPES = {
+    speed: {
+        id: 'speed',
+        name: 'Скорость',
+        description: 'Увеличивает скорость движения',
+        icon: '⚡',
+        baseValue: 5,
+        increment: 1,
+        maxLevel: 5
+    },
+    damage: {
+        id: 'damage',
+        name: 'Урон',
+        description: 'Увеличивает урон снарядов',
+        icon: '💥',
+        baseValue: 10,
+        increment: 5,
+        maxLevel: 5
+    },
+    fireRate: {
+        id: 'fireRate',
+        name: 'Скорострельность',
+        description: 'Уменьшает задержку между выстрелами',
+        icon: '🔥',
+        baseValue: 300,
+        increment: -50,
+        maxLevel: 5
+    },
+    health: {
+        id: 'health',
+        name: 'Жизни',
+        description: 'Добавляет дополнительную жизнь',
+        icon: '❤️',
+        baseValue: 3,
+        increment: 1,
+        maxLevel: 5
+    },
+    projectileSize: {
+        id: 'projectileSize',
+        name: 'Размер снаряда',
+        description: 'Увеличивает размер и радиус снарядов',
+        icon: '🎯',
+        baseValue: 8,
+        increment: 2,
+        maxLevel: 5
+    }
+};
+    
 // Адаптация размера canvas под экран
 function resizeCanvas() {
     canvas.width = Math.min(800, window.innerWidth);
@@ -20,17 +87,25 @@ const player = {
     color: '#3498db',
     lives: 3,
     invincible: false,
-    invincibleTime: 0
+    invincibleTime: 0,
+    upgrades: {
+        speed: 1,
+        damage: 1,
+        fireRate: 1,
+        health: 1,
+        projectileSize: 1
+    }
 };
 
 // Счёт и уровни
 let score = 0;
 let currentLevel = 1;
 let coinsCollected = 0;
+let coinsForShop = 0;
 let enemiesKilled = 0;
 let enemiesToSpawnBoss = 15;
-const maxLevels = 5;
-const coinsToWin = 10;
+const maxLevels = GAME_CONFIG.MAX_LEVELS;
+const coinsToWin = GAME_CONFIG.COINS_TO_WIN;
 
 // Объекты игры
 let coins = [];
@@ -45,8 +120,8 @@ let mouseX = 0;
 let mouseY = 0;
 
 // Скорости снарядов
-const projectileSpeed = 8;
-const bossProjectileSpeed = 5;
+const projectileSpeed = GAME_CONFIG.PROJECTILE_SPEED;
+const bossProjectileSpeed = GAME_CONFIG.BOSS_PROJECTILE_SPEED;
 
 // Элементы меню
 const scoreElement = document.getElementById('score');
@@ -55,9 +130,16 @@ const pauseMenu = document.getElementById('pauseMenu');
 const winMenu = document.getElementById('winMenu');
 const gameOverMenu = document.getElementById('gameOverMenu');
 const levelMenu = document.getElementById('levelMenu');
+const upgradeMenu = document.getElementById('upgradeMenu');
+const shopIndicator = document.getElementById('shopIndicator');
 
 // Состояние игры
 let gameState = 'menu';
+
+// Магазин улучшений
+let shopAvailable = false;
+let shopCooldown = 0;
+const SHOP_COOLDOWN_TIME = 300;
 
 // Объект для отслеживания нажатий клавиш
 const keys = {
@@ -84,8 +166,8 @@ const mobileKeys = {
 };
 
 // Константы количества объектов
-const maxCoins = 15;
-const maxEnemies = 5;
+const maxCoins = GAME_CONFIG.MAX_COINS;
+const maxEnemies = GAME_CONFIG.MAX_ENEMIES;
 
 // Настройка кнопок мобильного управления
 function setupMobileControl() {
@@ -142,6 +224,73 @@ setupMobileControl();
 
 // ==================== ФУНКЦИИ СОЗДАНИЯ ОБЪЕКТОВ ====================
 
+// ==================== ЗВУКОВЫЕ ЭФФЕКТЫ ====================
+const SoundEffects = {
+    ctx: null,
+    
+    init() {
+        if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    },
+    
+    playTone(frequency, duration, type = 'sine', volume = 0.3) {
+        if (!this.ctx) this.init();
+        if (!this.ctx) return;
+        
+        const oscillator = this.ctx.createOscillator();
+        const gainNode = this.ctx.createGain();
+        
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, this.ctx.currentTime);
+        
+        gainNode.gain.setValueAtTime(volume, this.ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(this.ctx.destination);
+        
+        oscillator.start();
+        oscillator.stop(this.ctx.currentTime + duration);
+    },
+    
+    playCoin() {
+        this.playTone(1200, 0.1, 'sine', 0.3);
+        setTimeout(() => this.playTone(1800, 0.1, 'sine', 0.2), 50);
+    },
+    
+    playShoot() {
+        this.playTone(400, 0.1, 'triangle', 0.15);
+    },
+    
+    playEnemyHit() {
+        this.playTone(200, 0.15, 'sawtooth', 0.2);
+    },
+    
+    playBossHit() {
+        this.playTone(150, 0.2, 'square', 0.25);
+        setTimeout(() => this.playTone(100, 0.2, 'square', 0.25), 100);
+    },
+    
+    playPlayerHit() {
+        this.playTone(100, 0.3, 'sawtooth', 0.3);
+        setTimeout(() => this.playTone(80, 0.3, 'sawtooth', 0.25), 150);
+    },
+    
+    playBossSpawn() {
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => this.playTone(200 + i * 50, 0.2, 'square', 0.2), i * 100);
+        }
+    },
+    
+    playLevelComplete() {
+        const notes = [523, 659, 784, 1047];
+        notes.forEach((note, i) => {
+            setTimeout(() => this.playTone(note, 0.2, 'sine', 0.3), i * 150);
+        });
+    }
+};
+    
 // Создание монетки
 function createCoin() {
     return {
@@ -212,12 +361,24 @@ function createExplosion(x, y, maxRadius, damage) {
 
 // Обновление счёта
 function updateScore() {
-    let text = `Уровень: ${currentLevel}/${maxLevels} | Счёт: ${score} | Жизни: ${player.lives} | Монет: ${coinsToWin - coinsCollected}/${coinsToWin}`;
+    let text = `Уровень: ${currentLevel}/${maxLevels} | Счёт: ${score} | Жизни: ${player.lives}/${player.maxLives} | Монет: ${coinsToWin - coinsCollected}/${coinsToWin}`;
+    if (shopAvailable) {
+        text += ` | 🛒 Магазин: ${coinsForShop} 🪙 [U]`;
+    }
     if (boss) {
         text += ` | БОСС: ${boss.health}/${boss.maxHealth}`;
     }
     if (gameState === 'playing') {
-        scoreElement.textContent = text;
+        scoreElement.innerHTML = text;
+        if (shopAvailable) {
+            shopIndicator.classList.remove('menu-hidden');
+            scoreElement.style.background = 'rgba(255, 215, 0, 0.3)';
+            scoreElement.style.borderColor = '#ffd700';
+        } else {
+            shopIndicator.classList.add('menu-hidden');
+            scoreElement.style.background = 'rgba(0, 0, 0, 0.3)';
+            scoreElement.style.borderColor = 'transparent';
+        }
     }
 }
 
@@ -225,7 +386,7 @@ function updateScore() {
 function resetPlayer() {
     player.x = canvas.width / 2 - player.size / 2;
     player.y = canvas.height / 2 - player.size / 2;
-    player.lives = 3;
+    player.lives = player.maxLives || 3;
     player.invincible = false;
     player.invincibleTime = 0;
 }
@@ -235,16 +396,153 @@ function resetGame() {
     score = 0;
     currentLevel = 1;
     coinsCollected = 0;
+    coinsForShop = 0;
     projectiles = [];
     enemyProjectiles = [];
     explosions = [];
+    
+    // Сброс улучшений
+    player.upgrades = {
+        speed: 1,
+        damage: 1,
+        fireRate: 1,
+        health: 1,
+        projectileSize: 1
+    };
+    
+    applyUpgrades();
     resetPlayer();
     initCoins();
     initEnemies();
     boss = null;
     enemiesKilled = 0;
-    enemiesToSpawnBoss = Math.max(5, 15 - (currentLevel - 1) * 3);
+    enemiesToSpawnBoss = GAME_CONFIG.ENEMIES_TO_SPAWN_BOSS_BASE - (currentLevel - 1) * GAME_CONFIG.ENEMIES_KILLED_PER_BOSS;
+    shopAvailable = false;
     updateScore();
+}
+    
+// Применение улучшений
+function applyUpgrades() {
+    player.speed = UPGRADE_TYPES.speed.baseValue + (player.upgrades.speed - 1) * UPGRADE_TYPES.speed.increment;
+    
+    const damageMultiplier = 1 + (player.upgrades.damage - 1) * 0.2;
+    player.projectileDamage = 10 * damageMultiplier;
+    
+    player.fireRate = Math.max(100, UPGRADE_TYPES.fireRate.baseValue + (player.upgrades.fireRate - 1) * UPGRADE_TYPES.fireRate.increment);
+    
+    player.maxLives = UPGRADE_TYPES.health.baseValue + (player.upgrades.health - 1) * UPGRADE_TYPES.health.increment;
+    player.lives = player.maxLives;
+    
+    player.projectileSize = UPGRADE_TYPES.projectileSize.baseValue + (player.upgrades.projectileSize - 1) * UPGRADE_TYPES.projectileSize.increment;
+}
+
+// Покупка улучшения
+function buyUpgrade(upgradeId) {
+    const upgrade = UPGRADE_TYPES[upgradeId];
+    
+    if (!upgrade) {
+        console.error('Неизвестное улучшение:', upgradeId);
+        return;
+    }
+    
+    const currentLevel = player.upgrades[upgradeId];
+    
+    // Проверка: не максимален ли уровень
+    if (currentLevel >= upgrade.maxLevel) {
+        console.log('Улучшение уже на максимуме');
+        return;
+    }
+    
+    // Проверка: хватает ли монет
+    if (coinsForShop < GAME_CONFIG.UPGRADE_COST) {
+        console.log('Не хватает монет:', coinsForShop, '<', GAME_CONFIG.UPGRADE_COST);
+        return;
+    }
+    
+    // Списание монет
+    coinsForShop -= GAME_CONFIG.UPGRADE_COST;
+    console.log('Куплено:', upgrade.name, 'осталось монет:', coinsForShop);
+    
+    // Применение улучшения
+    player.upgrades[upgradeId]++;
+    applyUpgrades();
+    
+    // Если куплено улучшение здоровья, восстанавливаем жизни
+    if (upgradeId === 'health') {
+        player.lives = player.maxLives;
+    }
+    
+    SoundEffects.playCoin();
+    updateScore();
+    renderShop();
+    
+    // Звук при достижении максимума
+    if (player.upgrades[upgradeId] >= upgrade.maxLevel) {
+        SoundEffects.playLevelComplete();
+    }
+}
+    
+// Показать магазин улучшений
+function showUpgradeMenu() {
+    gameState = 'shop';
+    renderShop();
+    upgradeMenu.classList.remove('menu-hidden');
+}
+
+// Скрыть магазин (без перехода уровня)
+function hideUpgradeMenu() {
+    upgradeMenu.classList.add('menu-hidden');
+    gameState = 'playing';
+    updateScore();
+}
+    
+// Перейти на следующий уровень из магазина
+function continueToNextLevel() {
+    upgradeMenu.classList.add('menu-hidden');
+    shopAvailable = false;
+    nextLevel();
+}
+    
+// Отрисовка магазина
+function renderShop() {
+    const container = document.getElementById('upgradeContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    Object.values(UPGRADE_TYPES).forEach(upgrade => {
+        const currentLevel = player.upgrades[upgrade.id];
+        const isMaxed = currentLevel >= upgrade.maxLevel;
+        const canAfford = coinsForShop >= GAME_CONFIG.UPGRADE_COST;
+        
+        const upgradeDiv = document.createElement('div');
+        upgradeDiv.className = 'upgrade-item';
+        upgradeDiv.innerHTML = `
+            <div class="upgrade-header">
+                <span class="upgrade-icon">${upgrade.icon}</span>
+                <span class="upgrade-name">${upgrade.name}</span>
+                <span class="upgrade-level">Ур. ${currentLevel}/${upgrade.maxLevel}</span>
+            </div>
+            <p class="upgrade-desc">${upgrade.description}</p>
+            <button class="upgrade-btn ${isMaxed ? 'upgrade-maxed' : ''} ${!canAfford && !isMaxed ? 'upgrade-unaffordable' : ''}" 
+                    ${isMaxed ? 'disabled' : ''}>
+                ${isMaxed ? 'Максимум' : `Купить (${GAME_CONFIG.UPGRADE_COST} 🪙)`}
+            </button>
+        `;
+        
+        container.appendChild(upgradeDiv);
+        
+        // Добавляем обработчик события для кнопки
+        const btn = upgradeDiv.querySelector('.upgrade-btn');
+        if (!isMaxed && canAfford) {
+            btn.addEventListener('click', () => {
+                console.log('Нажата кнопка:', upgrade.name);
+                buyUpgrade(upgrade.id);
+            });
+        }
+    });
+    
+    document.getElementById('upgradeCoins').textContent = coinsForShop;
 }
 
 // Показать главное меню
@@ -255,9 +553,18 @@ function showMainMenu() {
     winMenu.classList.add('menu-hidden');
     gameOverMenu.classList.add('menu-hidden');
     levelMenu.classList.add('menu-hidden');
+    upgradeMenu.classList.add('menu-hidden');
+    
+    // Инициализация базовых значений игрока
+    player.maxLives = 3;
+    player.lives = 3;
+    player.speed = 5;
+    player.fireRate = 300;
+    player.projectileSize = 8;
+    
     updateScore();
 }
-
+    
 // Показать паузу
 function showPauseMenu() {
     gameState = 'paused';
@@ -302,12 +609,15 @@ function startGame() {
     winMenu.classList.add('menu-hidden');
     gameOverMenu.classList.add('menu-hidden');
     levelMenu.classList.add('menu-hidden');
+    upgradeMenu.classList.add('menu-hidden');
+    updateScore();
 }
-
+    
 // Переход на следующий уровень
 function nextLevel() {
     currentLevel++;
     coinsCollected = 0;
+    coinsForShop = 0;
     projectiles = [];
     enemyProjectiles = [];
     boss = null;
@@ -315,13 +625,13 @@ function nextLevel() {
     resetPlayer();
     initCoins();
     initEnemies();
-    enemiesToSpawnBoss = Math.max(5, 15 - (currentLevel - 1) * 3);
+    enemiesToSpawnBoss = GAME_CONFIG.ENEMIES_TO_SPAWN_BOSS_BASE - (currentLevel - 1) * GAME_CONFIG.ENEMIES_KILLED_PER_BOSS;
+    shopAvailable = false;
     
     if (currentLevel > maxLevels) {
         showWinMenu();
     } else {
         gameState = 'playing';
-        levelMenu.classList.add('menu-hidden');
         updateScore();
     }
 }
@@ -331,8 +641,10 @@ function checkLevelWin() {
     if (coinsCollected >= coinsToWin && !boss) {
         if (currentLevel >= maxLevels) {
             showWinMenu();
-        } else {
-            showLevelMenu();
+        } else if (!shopAvailable) {
+            // Показываем магазин перед следующим уровнем
+            shopAvailable = true;
+            showUpgradeMenu();
         }
     }
 }
@@ -358,6 +670,16 @@ document.addEventListener('keydown', (e) => {
     if ((e.key === 'r' || e.key === 'R') && gameState === 'playing') {
         startGame();
     }
+    
+    // Магазин на U
+    if ((e.key === 'u' || e.key === 'U') && gameState === 'playing' && shopAvailable) {
+        showUpgradeMenu();
+    }
+    
+    // Закрытие магазина на Enter или Escape
+    if ((e.key === 'Enter' || e.key === 'Escape') && gameState === 'shop') {
+        hideUpgradeMenu();
+    }
 });
 
 document.addEventListener('keyup', (e) => {
@@ -382,13 +704,14 @@ canvas.addEventListener('mousedown', (e) => {
 
 // Стрельба игрока
 let lastShot = 0;
-const shootCooldown = 300;
+const shootCooldown = GAME_CONFIG.SHOOT_COOLDOWN;
 
 function shootProjectileToMouse() {
     const now = Date.now();
-    if (now - lastShot < shootCooldown) return;
+    if (now - lastShot < player.fireRate) return;
     
     lastShot = now;
+    SoundEffects.playShoot();
     
     const angle = Math.atan2(
         mouseY - (player.y + player.size / 2),
@@ -400,7 +723,7 @@ function shootProjectileToMouse() {
         y: player.y + player.size / 2,
         dx: Math.cos(angle) * projectileSpeed,
         dy: Math.sin(angle) * projectileSpeed,
-        size: 8,
+        size: player.projectileSize,
         isEnemy: false
     });
 }
@@ -467,6 +790,7 @@ function update() {
                 enemies.splice(j, 1);
                 projectiles.splice(i, 1);
                 score += 25;
+                SoundEffects.playEnemyHit();
                 enemiesKilled++;
                 updateScore();
                 enemies.push(createEnemy());
@@ -474,6 +798,7 @@ function update() {
                 // Проверка спавна босса
                 if (enemiesKilled % enemiesToSpawnBoss === 0 && !boss && enemiesKilled > 0) {
                     boss = createBoss();
+                    SoundEffects.playBossSpawn();
                 }
                 break;
             }
@@ -488,6 +813,7 @@ function update() {
             if (distance < projectiles[i].size + boss.size / 2) {
                 boss.health -= 10;
                 projectiles.splice(i, 1);
+                SoundEffects.playBossHit();
                 updateScore();
                 
                 if (boss.health <= 0) {
@@ -517,6 +843,7 @@ function update() {
         
         if (distance < proj.size + player.size / 2 && !player.invincible) {
             player.lives -= proj.damage;
+            SoundEffects.playPlayerHit();
             updateScore();
             enemyProjectiles.splice(i, 1);
             
@@ -543,6 +870,7 @@ function update() {
 
         if (distance < player.size / 2 + enemy.size / 2 && !player.invincible) {
             player.lives--;
+            SoundEffects.playPlayerHit();
             updateScore();
             
             if (player.lives <= 0) {
@@ -606,6 +934,7 @@ function update() {
         
         if (dist < exp.radius + player.size / 2 && !player.invincible && exp.radius > exp.maxRadius * 0.3) {
             player.lives -= exp.damage;
+            SoundEffects.playPlayerHit();
             updateScore();
             
             if (player.lives <= 0) {
@@ -636,6 +965,8 @@ function update() {
             coins.splice(i, 1);
             score += 10;
             coinsCollected++;
+            coinsForShop++;
+            SoundEffects.playCoin();
             updateScore();
             coins.push(createCoin());
             
@@ -863,6 +1194,7 @@ function gameLoop() {
 }
 
 // Обработчики кнопок меню
+document.addEventListener('click', () => SoundEffects.init(), { once: true });
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('resumeBtn').addEventListener('click', () => {
     hidePauseMenu();
@@ -875,6 +1207,8 @@ document.getElementById('playAgainBtn').addEventListener('click', startGame);
 document.getElementById('exitWinBtn').addEventListener('click', showMainMenu);
 document.getElementById('retryBtn').addEventListener('click', startGame);
 document.getElementById('exitLoseBtn').addEventListener('click', showMainMenu);
+document.getElementById('closeUpgradeBtn').addEventListener('click', hideUpgradeMenu);
+document.getElementById('nextLevelUpgradeBtn').addEventListener('click', continueToNextLevel);
 
 // Запуск
 showMainMenu();
